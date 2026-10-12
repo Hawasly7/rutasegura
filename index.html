@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RutaSegura</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: mapa a pantalla completa + panel lateral (escritorio) / hoja inferior (celular) */
+:root{
+  --ink:#10242b; --muted:#5b6f75; --bg:#f3f6f5; --panel:#ffffff; --line:#dbe4e3;
+  --sea:#0f7c86; --sea-soft:#e1f1f2;
+  --fast:#3b5bdb; --safe:#1f9d55; --risk:#e8590c; --risk-soft:rgba(232,89,12,.16);
+  --warn:#c77700;
+  --display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --ink:#e6eff0; --muted:#97aaae; --bg:#0d1719; --panel:#142225; --line:#24373b;
+  --sea:#3cc0c9; --sea-soft:#163338; --fast:#748ffc; --safe:#40c074; --risk:#ff8a3d; --risk-soft:rgba(255,138,61,.18); --warn:#f0a020; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --ink:#e6eff0; --muted:#97aaae; --bg:#0d1719; --panel:#142225; --line:#24373b;
+  --sea:#3cc0c9; --sea-soft:#163338; --fast:#748ffc; --safe:#40c074; --risk:#ff8a3d; --risk-soft:rgba(255,138,61,.18); --warn:#f0a020; color-scheme:dark }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--body);overflow:hidden}
+.app{display:grid;grid-template-columns:400px 1fr;height:100%}
+#map{height:100%;width:100%;background:var(--sea-soft)}
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:18px 18px 28px;display:flex;flex-direction:column;gap:18px;z-index:2}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand h1{font:800 26px/1 var(--display);margin:0;letter-spacing:-.02em}
+.brand h1 span{color:var(--sea)}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:var(--sea-soft);color:var(--sea);white-space:nowrap}
+.sub{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+.sec h2{font:700 11.5px/1 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 9px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--ink);font:600 13.5px var(--body);padding:7px 12px;border-radius:999px;cursor:pointer}
+.chip:hover{border-color:var(--sea)}
+.chip[aria-pressed="true"]{background:var(--sea);border-color:var(--sea);color:#fff}
+.chip:focus-visible,.btn:focus-visible,.seg button:focus-visible,.card:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1 1 140px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 13.5px var(--body);padding:9px 12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn:hover{border-color:var(--sea)}
+.btn.on{border-color:var(--sea);background:var(--sea-soft);color:var(--sea)}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.trip{display:grid;grid-template-columns:14px 1fr;gap:4px 10px;align-items:center;font-size:14px}
+.dot{width:12px;height:12px;border-radius:50%;justify-self:center}
+.dot.o{background:var(--sea);box-shadow:0 0 0 3px var(--sea-soft)}
+.dot.d{background:var(--ink);border-radius:3px}
+.vline{width:2px;height:14px;background:var(--line);justify-self:center}
+.trip b{font-weight:700}
+.trip small{color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--muted);font:600 13.5px var(--body);padding:7px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.cards{display:grid;gap:10px}
+.card{border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;cursor:pointer;background:var(--panel);display:grid;gap:8px}
+.card.sel{border-color:currentColor}
+.card.fast{color:var(--fast)} .card.safe{color:var(--safe)}
+.card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card .lbl{font:700 12px var(--body);letter-spacing:.07em;text-transform:uppercase}
+.card .min{font:800 30px/1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums}
+.card .min small{font:600 14px var(--body);color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.meter{height:6px;border-radius:9px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:9px}
+.score{font-weight:700;color:var(--ink)}
+.note{font-size:13px;color:var(--muted);background:var(--sea-soft);border-radius:10px;padding:9px 11px}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.steps li:first-child{border-top:0}
+.ico{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font:700 11px var(--body);color:#fff}
+.ico.walk{background:var(--muted)} .ico.bus{background:var(--sea)} .ico.end{background:var(--ink);color:var(--panel)}
+.steps .warn{color:var(--warn);font-weight:600}
+.steps small{color:var(--muted);display:block}
+.legend{display:grid;gap:6px;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:8px}
+.sw{width:22px;height:4px;border-radius:3px;display:inline-block}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+.live{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:500;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:600;font-size:13.5px;box-shadow:0 4px 18px rgba(0,0,0,.15);display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px)}
+.live .pulse{width:9px;height:9px;border-radius:50%;background:var(--risk);animation:p 1.2s infinite}
+.mapwrap{position:relative;height:100%;min-width:0}
+.hint{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:500;background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:999px;font-weight:600;font-size:13.5px}
+@keyframes p{50%{opacity:.25}}
+/* marcadores */
+.me{width:18px;height:18px;border-radius:50%;background:#1c7ed6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(28,126,214,.25)}
+.me.anim{animation:halo 1.4s infinite}
+@keyframes halo{50%{box-shadow:0 0 0 12px rgba(28,126,214,.08)}}
+.st{width:22px;height:22px;border-radius:6px;background:var(--sea);color:#fff;font:800 11px var(--body);display:grid;place-items:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.st.near{background:#f59f00}
+.st.feeder{background:#748a8f;width:16px;height:16px;font-size:9px;border-radius:50%}
+.uni{width:46px;height:30px;padding:0 4px;border-radius:10px;background:var(--ink);color:var(--panel);display:grid;place-items:center;font:800 13px var(--display);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.leaflet-popup-content{font:14px/1.4 var(--body);margin:11px 13px}
+.leaflet-popup-content b{font-size:15px}
+.pop small{color:#5b6f75}
+@media (prefers-reduced-motion:reduce){.live .pulse,.me.anim{animation:none}}
+@media (max-width:820px){
+  body{overflow:auto}
+  .app{grid-template-columns:1fr;grid-template-rows:55vh auto;height:auto}
+  .mapwrap{height:55vh;order:-1;position:sticky;top:0;z-index:1}
+  .panel{border-right:0;border-top:1px solid var(--line);overflow:visible;padding:16px 16px calc(28px + env(safe-area-inset-bottom,0px))}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel" aria-label="Planear ruta">
+    <div>
+      <div class="brand"><h1>Ruta<span>Segura</span></h1><span class="tag">Prototipo · datos de ejemplo</span></div>
+      <p class="sub">Rutas a pie y en Transcaribe hasta el Campus Piedra de Bolívar, comparando la más rápida con la más segura.</p>
+    </div>
+
+    <section class="sec">
+      <h2>¿Dónde estás?</h2>
+      <div class="chips" id="presets"></div>
+      <div class="row" style="margin-top:9px">
+        <button class="btn" id="pickBtn" type="button">📍 Marcar en el mapa</button>
+        <button class="btn" id="gpsBtn" type="button">◎ Usar mi GPS</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="trip">
+        <span class="dot o"></span><div><b id="originName">Manga</b> <small id="originHint"></small></div>
+        <span class="vline"></span><span></span>
+        <span class="dot d"></span><div><b>Campus Piedra de Bolívar</b> <small>U. de Cartagena</small></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>¿A qué hora vas?</h2>
+      <div class="seg" id="timeSeg">
+        <button type="button" data-t="day">☀ De día</button>
+        <button type="button" data-t="night">☾ De noche</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Opciones</h2>
+      <div class="cards" id="cards"></div>
+      <div class="note" id="same" hidden></div>
+    </section>
+
+    <section class="sec">
+      <h2 id="stepsTitle">Paso a paso</h2>
+      <ol class="steps" id="steps"></ol>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="simBtn" type="button">▶ Simular trayecto en vivo</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Convenciones</h2>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--fast)"></i>Ruta más rápida</span>
+        <span><i class="sw" style="background:var(--safe)"></i>Ruta más segura</span>
+        <span><i class="sw" style="background:var(--risk);height:10px;opacity:.5;border-radius:50%;width:14px"></i>Zona de riesgo (cambia según la hora)</span>
+        <span><span class="st" style="width:18px;height:18px;font-size:9px">T</span>Estación troncal Transcaribe</span>
+        <span><span class="st feeder">A</span>Parada alimentadora</span>
+      </div>
+    </section>
+
+    <p class="foot">Prototipo para demostración. Las estaciones están ubicadas en su posición real; los tiempos, rutas de bus, niveles de riesgo y zonas son <b>datos de ejemplo</b>, no información oficial de Transcaribe ni de la Policía.</p>
+  </aside>
+
+  <div class="mapwrap">
+    <div id="map" role="application" aria-label="Mapa de Cartagena"></div>
+    <div class="live" id="live" hidden><span class="pulse"></span><span id="liveTxt">Ubicación en vivo</span></div>
+    <div class="hint" id="hint" hidden>Toca el mapa donde estás</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ================= DATOS (ejemplo) ================= */
+const CAMPUS = {name:"Campus Piedra de Bolívar", lat:10.4027174, lng:-75.5055852};
+
+const PRESETS = [
+  {name:"Manga", lat:10.4112, lng:-75.5408},
+  {name:"Torices", lat:10.4300, lng:-75.5385},
+  {name:"Centro", lat:10.4228, lng:-75.5488},
+  {name:"Pie de la Popa", lat:10.4185, lng:-75.5335},
+  {name:"El Bosque", lat:10.3955, lng:-75.5205},
+  {name:"Los Alpes", lat:10.3925, lng:-75.4835},
+];
+
+// Estaciones troncales (posición real, atributos de ejemplo), en orden a lo largo del corredor
+const TRUNK = [
+  {id:"bod", name:"La Bodeguita", lat:10.4199139, lng:-75.551605, routes:"T101, X102", light:"Buena", guard:true, risk:{day:4,night:8}},
+  {id:"cen", name:"Centro", lat:10.4252662, lng:-75.5462799, routes:"T101, T102, X102", light:"Buena", guard:true, risk:{day:4,night:8}},
+  {id:"pop", name:"La Popa", lat:10.4204943, lng:-75.5307462, routes:"T101, T103", light:"Deficiente", guard:false, risk:{day:8,night:24}},
+  {id:"baz", name:"Mercado Bazurto", lat:10.4137632, lng:-75.523607, routes:"T101, T102, T103", light:"Regular", guard:false, risk:{day:16,night:30}},
+  {id:"esp", name:"España", lat:10.4083029, lng:-75.512962, routes:"T101, X103", light:"Buena", guard:true, risk:{day:4,night:9}},
+  {id:"cua", name:"Cuatro Vientos", lat:10.4065815, lng:-75.5032877, routes:"T101, T102, T103", light:"Regular", guard:true, risk:{day:6,night:14}},
+  {id:"eje", name:"Los Ejecutivos", lat:10.3994424, lng:-75.4936444, routes:"T101, T102", light:"Buena", guard:true, risk:{day:4,night:10}},
+  {id:"ang", name:"Los Ángeles", lat:10.3951697, lng:-75.4904745, routes:"T102", light:"Regular", guard:false, risk:{day:6,night:16}},
+  {id:"mbe", name:"Madre Bernarda", lat:10.3949503, lng:-75.4790887, routes:"T101, T102, T103", light:"Regular", guard:true, risk:{day:6,night:15}},
+];
+
+// Paradas alimentadoras (solo informativas en el prototipo)
+const FEEDERS = [
+  {name:"Parada X103 · Zaragocilla", lat:10.3994382, lng:-75.4999271, routes:"X103"},
+  {name:"Paradero X102 · Bosquesito", lat:10.3928635, lng:-75.5168314, routes:"X102"},
+  {name:"Parada Dg. 22 · Paraguay", lat:10.4018184, lng:-75.5192987, routes:"X102"},
+];
+
+// Zonas de riesgo de EJEMPLO. weight = puntos de riesgo por atravesarla.
+const ZONES = [
+  {name:"Alrededores del mercado", why:"Alta afluencia y reportes de hurto", lat:10.4128, lng:-75.5240, r:380, w:{day:30,night:45}},
+  {name:"Paso lateral Cuatro Vientos", why:"Tramo con poca iluminación hacia el campus", lat:10.4048, lng:-75.5046, r:170, w:{day:4,night:38}},
+  {name:"Paso sobre el caño (Manga)", why:"Tramo solitario en la noche", lat:10.4163, lng:-75.5357, r:230, w:{day:8,night:42}},
+  {name:"Calles internas de El Bosque", why:"Poca vigilancia y robos reportados", lat:10.3935, lng:-75.5160, r:300, w:{day:18,night:36}},
+  {name:"Callejón Andalucía", why:"Calle sin alumbrado", lat:10.4000, lng:-75.5082, r:150, w:{day:4,night:28}},
+];
+
+const WALK_MPM = 78;        // metros por minuto caminando
+const DETOUR = 1.25;        // factor de calles vs línea recta
+const BUS_KMH = 20, WAIT_MIN = 7, STOP_MIN = .6;
+
+/* ================= UTILIDADES ================= */
+const R = 6371000, rad = d => d*Math.PI/180;
+function dist(a,b){const dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng);const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+const fmtM = m => m>=1000 ? (m/1000).toFixed(1).replace(".",",")+" km" : Math.round(m/10)*10+" m";
+const P = (lat,lng)=>({lat,lng});
+
+// Riesgo de un tramo a pie: muestrea puntos y suma el peso de cada zona que atraviesa
+function legRisk(path, mode){
+  let pts=[]; for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];const n=Math.max(2,Math.ceil(dist(a,b)/40));for(let k=0;k<=n;k++){pts.push(P(a.lat+(b.lat-a.lat)*k/n,a.lng+(b.lng-a.lng)*k/n));}}
+  let total=0, hits=[];
+  for(const z of ZONES){const inside=pts.filter(p=>dist(p,z)<=z.r).length; if(inside){const frac=Math.min(1,inside/Math.max(3,pts.length*.25)); total+=z.w[mode]*(.45+.55*frac); hits.push(z);}}
+  return {risk:total, hits};
+}
+
+/* ================= PLANIFICADOR ================= */
+function plan(origin, mode){
+  const cands=[];
+  // Opción solo a pie
+  const dW=dist(origin,CAMPUS)*DETOUR;
+  if(dW<3200){const r=legRisk([origin,CAMPUS],mode);cands.push({kind:"walk",time:dW/WALK_MPM,walk:dW,risk:r.risk,legs:[{type:"walk",from:origin,to:CAMPUS,m:dW,hits:r.hits}],stops:0});}
+  const boards=TRUNK.map((s,i)=>({s,i,d:dist(origin,s)})).filter(x=>x.d<2600);
+  const alights=TRUNK.map((s,i)=>({s,i,d:dist(s,CAMPUS)})).filter(x=>x.d<1500);
+  for(const b of boards) for(const a of alights){
+    if(b.i===a.i) continue;
+    const step=b.i<a.i?1:-1; let busM=0, seq=[b.s];
+    for(let k=b.i;k!==a.i;k+=step){busM+=dist(TRUNK[k],TRUNK[k+step])*1.12;seq.push(TRUNK[k+step]);}
+    const w1=b.d*DETOUR, w2=a.d*DETOUR;
+    const busMin=busM/(BUS_KMH*1000/60)+WAIT_MIN+(seq.length-2)*STOP_MIN;
+    const r1=legRisk([origin,b.s],mode), r2=legRisk([a.s,CAMPUS],mode);
+    const risk=r1.risk+r2.risk+b.s.risk[mode]+a.s.risk[mode];
+    cands.push({kind:"bus",time:w1/WALK_MPM+busMin+w2/WALK_MPM,walk:w1+w2,risk,board:b.s,alight:a.s,seq,stops:seq.length-1,
+      legs:[{type:"walk",from:origin,to:b.s,m:w1,hits:r1.hits},{type:"bus",seq,m:busM,min:busMin},{type:"walk",from:a.s,to:CAMPUS,m:w2,hits:r2.hits}]});
+  }
+  cands.forEach(c=>{c.score=Math.max(10,Math.round(100-c.risk*.8));});
+  const fast=[...cands].sort((x,y)=>x.time-y.time)[0];
+  const safe=[...cands].sort((x,y)=>(x.time+x.risk*.9)-(y.time+y.risk*.9) || y.score-x.score)[0];
+  return {fast,safe};
+}
+
+/* ================= MAPA ================= */
+const map=L.map("map",{zoomControl:true,attributionControl:true}).setView([10.41,-75.52],14);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
+
+const zoneLayer=L.layerGroup().addTo(map), stLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map);
+L.marker([CAMPUS.lat,CAMPUS.lng],{icon:L.divIcon({className:"",html:'<div class="uni">UdeC</div>',iconSize:[46,30],iconAnchor:[23,15]}),zIndexOffset:900})
+ .addTo(map).bindPopup('<div class="pop"><b>Campus Piedra de Bolívar</b><br><small>Universidad de Cartagena · Av. del Consulado</small></div>');
+FEEDERS.forEach(f=>L.marker([f.lat,f.lng],{icon:L.divIcon({className:"",html:'<div class="st feeder">A</div>',iconSize:[16,16],iconAnchor:[8,8]})})
+ .addTo(stLayer).bindPopup(`<div class="pop"><b>${f.name}</b><br><small>Ruta alimentadora ${f.routes} (ejemplo)</small></div>`));
+const stMarkers={};
+TRUNK.forEach(s=>{stMarkers[s.id]=L.marker([s.lat,s.lng],{icon:stIcon(false)}).addTo(stLayer);});
+function stIcon(near){return L.divIcon({className:"",html:`<div class="st${near?" near":""}">T</div>`,iconSize:[22,22],iconAnchor:[11,11]});}
+
+const meIcon=L.divIcon({className:"",html:'<div class="me anim"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+let meMarker=L.marker([0,0],{icon:meIcon,zIndexOffset:1000,draggable:true}).addTo(map);
+meMarker.on("dragend",e=>{const p=e.target.getLatLng();setOrigin({name:"Punto marcado",lat:p.lat,lng:p.lng},"arrastrado en el mapa");});
+
+/* ================= ESTADO ================= */
+const state={origin:PRESETS[0],mode:(new Date().getHours()>=18||new Date().getHours()<6)?"night":"day",sel:"safe",result:null,pick:false,gpsId:null,sim:null,geom:{}};
+
+function drawZones(){
+  zoneLayer.clearLayers();
+  ZONES.forEach(z=>{const w=z.w[state.mode];const col=getComputedStyle(document.documentElement).getPropertyValue("--risk").trim()||"#e8590c";
+    L.circle([z.lat,z.lng],{radius:z.r,color:col,weight:1,fillColor:col,fillOpacity:Math.min(.42,.06+w/110),opacity:.6})
+     .addTo(zoneLayer).bindPopup(`<div class="pop"><b>${z.name}</b><br>${z.why}<br><small>Nivel de riesgo ${state.mode==="night"?"de noche":"de día"}: ${w>=35?"alto":w>=15?"medio":"bajo"} · dato de ejemplo</small></div>`);});
+}
+function stationPopup(s){const n=state.mode==="night";return `<div class="pop"><b>Estación ${s.name}</b><br>Rutas: ${s.routes}<br>Iluminación: ${s.light} · Vigilancia: ${s.guard?"sí":"no"}<br><small>Riesgo ${n?"nocturno":"diurno"}: ${s.risk[state.mode]>=20?"medio-alto":s.risk[state.mode]>=10?"medio":"bajo"} · a ${fmtM(dist(state.origin,s))} de ti (ejemplo)</small></div>`;}
+
+function colorOf(k){return getComputedStyle(document.documentElement).getPropertyValue(k==="fast"?"--fast":"--safe").trim();}
+
+/* Geometría real por calles con OSRM (si hay internet); si falla, línea recta */
+async function osrm(profile, pts){
+  const key=profile+pts.map(p=>p.lat.toFixed(5)+","+p.lng.toFixed(5)).join("|");
+  if(state.geom[key]!==undefined) return state.geom[key];
+  const base=profile==="foot"?"https://routing.openstreetmap.de/routed-foot/route/v1/driving/":"https://routing.openstreetmap.de/routed-car/route/v1/driving/";
+  try{const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),7000);
+    const res=await fetch(base+pts.map(p=>p.lng+","+p.lat).join(";")+"?overview=full&geometries=geojson",{signal:ctl.signal});clearTimeout(t);
+    const j=await res.json();const g=j.routes&&j.routes[0]?{coords:j.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]),m:j.routes[0].distance}:null;
+    state.geom[key]=g;return g;}catch(e){state.geom[key]=null;return null;}
+}
+async function routeCoords(opt){
+  const parts=[];
+  for(const leg of opt.legs){
+    if(leg.type==="walk"){const g=await osrm("foot",[leg.from,leg.to]);parts.push({type:"walk",coords:g?g.coords:[[leg.from.lat,leg.from.lng],[leg.to.lat,leg.to.lng]],real:!!g,m:g?g.m:leg.m});}
+    else{const g=await osrm("car",leg.seq);parts.push({type:"bus",coords:g?g.coords:leg.seq.map(s=>[s.lat,s.lng])});}
+  }
+  return parts;
+}
+
+let drawToken=0;
+async function drawRoutes(){
+  const tok=++drawToken; routeLayer.clearLayers();
+  const {fast,safe}=state.result; const same=fast===safe;
+  const order=state.sel==="fast"?["safe","fast"]:["fast","safe"];
+  const all=[];
+  // Dibujo provisional inmediato (líneas rectas) y luego geometría por calles
+  for(const pass of [0,1]){
+    const layers=[];
+    for(const k of order){
+      if(same && k!==state.sel) continue;
+      const opt=state.result[k]; const parts=pass===0?opt.legs.map(l=>l.type==="walk"?{type:"walk",coords:[[l.from.lat,l.from.lng],[l.to.lat,l.to.lng]]}:{type:"bus",coords:l.seq.map(s=>[s.lat,s.lng])}):await routeCoords(opt);
+      if(tok!==drawToken) return;
+      const sel=k===state.sel, col=colorOf(k);
+      parts.forEach(p=>{
+        if(sel) layers.push(L.polyline(p.coords,{color:"#fff",weight:p.type==="bus"?10:8,opacity:.9}));
+        layers.push(L.polyline(p.coords,{color:col,weight:p.type==="bus"?6:4.5,opacity:sel?1:.45,dashArray:p.type==="walk"?"2 9":null,lineCap:"round"}).on("click",()=>select(k)));
+        if(sel) all.push(...p.coords);
+      });
+      if(pass===1 && sel){opt.path=parts.flatMap(p=>p.coords);opt.walkReal=parts.filter(p=>p.type==="walk"&&p.real).length?parts.filter(p=>p.type==="walk").reduce((s,p)=>s+p.m,0):null;}
+    }
+    routeLayer.clearLayers(); layers.forEach(l=>l.addTo(routeLayer));
+    if(pass===0){const b=L.latLngBounds(all.concat([[state.origin.lat,state.origin.lng],[CAMPUS.lat,CAMPUS.lng]]));map.fitBounds(b,{padding:[40,40],maxZoom:16});all.length=0;}
+  }
+}
+
+/* ================= UI ================= */
+const $=id=>document.getElementById(id);
+function renderPresets(){
+  $("presets").innerHTML=PRESETS.map((p,i)=>`<button class="chip" type="button" data-i="${i}" aria-pressed="${state.origin.name===p.name}">${p.name}</button>`).join("");
+  $("presets").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{stopGps();setOrigin(PRESETS[+b.dataset.i],"");});
+}
+function card(k,opt,label){
+  const col=k==="fast"?"var(--fast)":"var(--safe)";
+  const scoreCol=opt.score>=75?"var(--safe)":opt.score>=50?"var(--warn)":"var(--risk)";
+  const how=opt.kind==="walk"?"Solo a pie":`${opt.board.name} → ${opt.alight.name}`;
+  return `<div class="card ${k}${state.sel===k?" sel":""}" tabindex="0" role="button" aria-pressed="${state.sel===k}" data-k="${k}">
+    <div class="top"><span class="lbl">${label}</span><span class="min">${Math.round(opt.time)}<small> min</small></span></div>
+    <div class="meta"><span>🚶 ${fmtM(opt.walk)}</span>${opt.kind==="bus"?`<span>🚌 ${opt.stops} ${opt.stops===1?"estación":"estaciones"}</span>`:""}<span style="color:var(--ink)">${how}</span></div>
+    <div class="meta" style="justify-content:space-between"><span>Seguridad <span class="score">${opt.score}/100</span></span><span>${opt.score>=75?"Bajo riesgo":opt.score>=50?"Precaución":"Riesgo alto"}</span></div>
+    <div class="meter"><i style="width:${opt.score}%;background:${scoreCol}"></i></div>
+  </div>`;
+}
+function renderCards(){
+  const {fast,safe}=state.result, same=fast===safe;
+  if(same){state.sel="safe";$("cards").innerHTML=card("safe",safe,"Rápida y segura");$("same").hidden=false;
+    $("same").textContent=state.mode==="day"?"De día, la ruta más rápida también es la más segura. Cambia a “De noche” para ver cómo se ajusta el recorrido.":"La ruta más rápida también es la más segura desde este punto.";}
+  else{$("cards").innerHTML=card("fast",fast,"Más rápida")+card("safe",safe,"Más segura");$("same").hidden=true;
+    const extra=Math.round(safe.time-fast.time);$("same").hidden=false;$("same").textContent=`La ruta segura toma ${extra>0?extra+" min más":"casi lo mismo"} y sube la seguridad de ${fast.score} a ${safe.score} puntos.`;}
+  $("cards").querySelectorAll(".card").forEach(c=>{c.onclick=()=>select(c.dataset.k);c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(c.dataset.k);}};});
+}
+function renderSteps(){
+  const opt=state.result[state.sel];
+  $("stepsTitle").textContent="Paso a paso · "+(state.result.fast===state.result.safe?"ruta recomendada":state.sel==="fast"?"más rápida":"más segura");
+  const warn=h=>h.length?`<span class="warn">⚠ Atraviesa: ${h.map(z=>z.name.toLowerCase()).join(", ")}</span>`:"";
+  let html="";
+  opt.legs.forEach(l=>{
+    if(l.type==="walk"){const to=l.to===CAMPUS?"el campus":"la estación "+l.to.name;
+      html+=`<li><span class="ico walk">🚶</span><div>Camina ${fmtM(l.m)} hasta ${to}<small>≈ ${Math.max(1,Math.round(l.m/WALK_MPM))} min</small>${warn(l.hits)}</div></li>`;}
+    else{const b=l.seq[0],a=l.seq[l.seq.length-1];
+      html+=`<li><span class="ico bus">T</span><div>Toma Transcaribe en <b>${b.name}</b> hacia ${l.seq[1]&&TRUNK.indexOf(a)>TRUNK.indexOf(b)?"Portal":"Centro"}<small>Rutas ${b.routes} · espera ≈ ${WAIT_MIN} min (ejemplo)</small></div></li>`;
+      html+=`<li><span class="ico bus">↓</span><div>Bájate en <b>${a.name}</b> tras ${l.seq.length-1} ${l.seq.length-1===1?"estación":"estaciones"}<small>≈ ${Math.round(l.min)} min en bus</small></div></li>`;}
+  });
+  html+=`<li><span class="ico end">✓</span><div><b>Llegas al Campus Piedra de Bolívar</b><small>Tiempo total ≈ ${Math.round(opt.time)} min</small></div></li>`;
+  $("steps").innerHTML=html;
+}
+function highlightStations(){
+  const opt=state.result[state.sel]; const ids=opt.kind==="bus"?[opt.board.id,opt.alight.id]:[];
+  TRUNK.forEach(s=>{stMarkers[s.id].setIcon(stIcon(ids.includes(s.id)));stMarkers[s.id].bindPopup(stationPopup(s));});
+}
+function select(k){if(state.result.fast===state.result.safe) k="safe"; state.sel=k; stopSim(); renderCards(); renderSteps(); highlightStations(); drawRoutes();}
+
+function recompute(){
+  state.result=plan(state.origin,state.mode);
+  if(!state.result.fast){return;}
+  state.sel = state.result.fast===state.result.safe ? "safe" : state.sel;
+  meMarker.setLatLng([state.origin.lat,state.origin.lng]);
+  $("originName").textContent=state.origin.name;
+  renderPresets(); renderCards(); renderSteps(); highlightStations(); drawZones(); drawRoutes();
+}
+function setOrigin(o,hint){stopSim();state.origin=o;$("originHint").textContent=hint||"";recompute();}
+
+/* Hora */
+function renderSeg(){$("timeSeg").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.t===state.mode));}
+$("timeSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.mode=b.dataset.t;renderSeg();recompute();});
+
+/* Marcar en el mapa */
+$("pickBtn").onclick=()=>{state.pick=!state.pick;$("pickBtn").classList.toggle("on",state.pick);$("hint").hidden=!state.pick;};
+map.on("click",e=>{if(!state.pick) return;state.pick=false;$("pickBtn").classList.remove("on");$("hint").hidden=true;stopGps();
+  setOrigin({name:"Punto marcado",lat:e.latlng.lat,lng:e.latlng.lng},"marcado en el mapa");});
+
+/* GPS real */
+function stopGps(){if(state.gpsId!==null){navigator.geolocation.clearWatch(state.gpsId);state.gpsId=null;}$("gpsBtn").classList.remove("on");$("gpsBtn").textContent="◎ Usar mi GPS";}
+$("gpsBtn").onclick=()=>{
+  if(state.gpsId!==null){stopGps();$("live").hidden=true;return;}
+  if(!("geolocation" in navigator)){alertLive("Este navegador no permite ubicación");return;}
+  $("gpsBtn").classList.add("on");$("gpsBtn").textContent="◎ Buscando señal…";
+  let last=null;
+  state.gpsId=navigator.geolocation.watchPosition(pos=>{
+    const p={name:"Tu ubicación (GPS)",lat:pos.coords.latitude,lng:pos.coords.longitude};
+    $("gpsBtn").textContent="◎ GPS activo · detener";
+    $("live").hidden=false;$("liveTxt").textContent=`GPS en vivo · precisión ±${Math.round(pos.coords.accuracy)} m`;
+    if(dist(p,CAMPUS)>15000){meMarker.setLatLng([p.lat,p.lng]);$("liveTxt").textContent="Estás fuera de Cartagena: usa un barrio o marca en el mapa";return;}
+    if(!last||dist(last,p)>120){last=p;setOrigin(p,"en tiempo real");} else meMarker.setLatLng([p.lat,p.lng]);
+  },err=>{stopGps();alertLive(err.code===1?"Permiso de ubicación denegado":"No se pudo obtener la ubicación");},{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+};
+function alertLive(t){$("live").hidden=false;$("liveTxt").textContent=t;setTimeout(()=>{if(state.gpsId===null&&!state.sim)$("live").hidden=true;},3500);}
+
+/* Simulación de trayecto en vivo */
+function stopSim(){if(state.sim){cancelAnimationFrame(state.sim.raf);state.sim=null;$("simBtn").textContent="▶ Simular trayecto en vivo";meMarker.setLatLng([state.origin.lat,state.origin.lng]);if(state.gpsId===null)$("live").hidden=true;}}
+$("simBtn").onclick=async()=>{
+  if(state.sim){stopSim();return;}
+  stopGps();
+  const opt=state.result[state.sel];
+  const parts=await routeCoords(opt);
+  const pts=[];parts.forEach(p=>p.coords.forEach(c=>pts.push({lat:c[0],lng:c[1],type:p.type})));
+  const cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+dist(pts[i-1],pts[i]));
+  const total=cum[cum.length-1], dur=18000, t0=performance.now();
+  $("simBtn").textContent="■ Detener simulación";$("live").hidden=false;
+  const tick=now=>{
+    const f=Math.min(1,(now-t0)/dur), d=f*total; let i=cum.findIndex(c=>c>=d); if(i<1)i=1;
+    const a=pts[i-1],b=pts[i],seg=(cum[i]-cum[i-1])||1,u=(d-cum[i-1])/seg;
+    const p={lat:a.lat+(b.lat-a.lat)*u,lng:a.lng+(b.lng-a.lng)*u};
+    meMarker.setLatLng([p.lat,p.lng]);
+    const left=Math.max(0,Math.round(opt.time*(1-f)));
+    let msg=b.type==="bus"?"En Transcaribe":"Caminando";
+    const nearZone=ZONES.find(z=>dist(p,z)<=z.r&&z.w[state.mode]>=25);
+    if(nearZone) msg="⚠ Zona de riesgo: "+nearZone.name.toLowerCase();
+    $("liveTxt").textContent=f<1?`${msg} · llegas en ${left} min`:"Llegaste al campus ✓";
+    if(f<1) state.sim.raf=requestAnimationFrame(tick); else {state.sim=null;$("simBtn").textContent="▶ Simular trayecto en vivo";}
+  };
+  state.sim={raf:requestAnimationFrame(tick)};
+};
+
+/* Inicio */
+renderSeg(); setOrigin(PRESETS[0],"");
+</script>
+</body>
+</html>
